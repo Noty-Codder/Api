@@ -5,9 +5,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.security import encrypt_secret, hash_password, mask_secret
+from app.core.security import encrypt_secret, hash_password, mask_secret, sha256_hex, utc_now
+from app.models.api_key import ApiKey
 from app.models.gateway import MasterGatewayConfig, MediaGatewayConfig
-from app.models.plan import SubscriptionPlan
+from app.models.plan import Subscription, SubscriptionPlan
 from app.models.user import User
 
 DEFAULT_PLANS = [
