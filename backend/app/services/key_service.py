@@ -188,6 +188,21 @@ def create_additional_key(db: Session, user: User, name: str) -> ApiKey:
         )
 
     plan = db.get(SubscriptionPlan, sub.plan_id)
+    if plan.price_paise == 0:
+        thirty_days_ago = utc_now() - timedelta(days=30)
+        recent_free_keys = db.scalar(
+            select(func.count(ApiKey.id)).where(
+                ApiKey.user_id == user.id,
+                ApiKey.is_free_tier.is_(True),
+                ApiKey.created_at >= thirty_days_ago,
+            )
+        ) or 0
+        if recent_free_keys >= 1:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Free plan allows only 1 API key generation per month (30 days). Upgrade to a paid plan for additional keys.",
+            )
+
     active_count = db.scalar(
         select(func.count(ApiKey.id)).where(ApiKey.subscription_id == sub.id, ApiKey.status == "active")
     ) or 0

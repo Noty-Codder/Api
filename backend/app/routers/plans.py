@@ -88,17 +88,47 @@ def activate_free_plan(
     if plan.price_paise != 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Paid plans must go through Razorpay checkout.")
 
-    # Prevent repeated free sandbox abuse once already used
-    prior_free = db.scalar(
-        select(Subscription.id)
+    # Rule: One user can only generate/activate a free API key ONCE per month (30 days)
+    now = utc_now()
+    thirty_days_ago = now - timedelta(days=30)
+    
+    recent_free_sub = db.scalar(
+        select(Subscription)
         .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.id)
-        .where(Subscription.user_id == user.id, SubscriptionPlan.price_paise == 0)
+        .where(
+            Subscription.user_id == user.id,
+            SubscriptionPlan.price_paise == 0,
+            Subscription.created_at >= thirty_days_ago,
+        )
+        .order_by(Subscription.created_at.desc())
         .limit(1)
     )
-    if prior_free:
+    
+    recent_free_key = db.scalar(
+        select(ApiKey)
+        .where(
+            ApiKey.user_id == user.id,
+            ApiKey.is_free_tier.is_(True),
+            ApiKey.created_at >= thirty_days_ago,
+        )
+        .order_by(ApiKey.created_at.desc())
+        .limit(1)
+    )
+
+    last_claimed_at = None
+    if recent_free_sub and recent_free_sub.created_at:
+        last_claimed_at = recent_free_sub.created_at
+    if recent_free_key and recent_free_key.created_at:
+        key_time = recent_free_key.created_at
+        if last_claimed_at is None or key_time > last_claimed_at:
+            last_claimed_at = key_time
+
+    if last_claimed_at:
+        next_available = last_claimed_at + timedelta(days=30)
+        days_left = max(1, (next_available - now).days)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Free trial plan has already been claimed on this account. Upgrade to Starter or Pro.",
+            detail=f"You can only generate 1 free API key once per month. Your next free key will be available in {days_left} day(s). Upgrade to a paid plan for instant keys.",
         )
 
     sub, api_key = provision_subscription_and_key(db, user, plan, action="new", key_name=f"{plan.name} Key")
