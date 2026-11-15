@@ -9,12 +9,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/tokens.css?v=20261114_plans7" />
-  <link rel="stylesheet" href="/css/base.css?v=20261114_plans7" />
-  <link rel="stylesheet" href="/css/landing.css?v=20261114_plans7" />
-  <link rel="stylesheet" href="/css/dashboard.css?v=20261114_plans7" />
-  <link rel="stylesheet" href="/css/admin.css?v=20261114_plans7" />
+  <link rel="stylesheet" href="/css/tokens.css?v=20261115_theme_legal" />
+  <link rel="stylesheet" href="/css/base.css?v=20261115_theme_legal" />
+  <link rel="stylesheet" href="/css/landing.css?v=20261115_theme_legal" />
+  <link rel="stylesheet" href="/css/dashboard.css?v=20261115_theme_legal" />
+  <link rel="stylesheet" href="/css/admin.css?v=20261115_theme_legal" />
   <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
   <header id="navbar-root"></header>
@@ -26,11 +34,13 @@
     </div>
   </main>
 
+  <footer id="footer-root"></footer>
+
   <div id="modal-root"></div>
   <div id="toast-root" class="toast-container" aria-live="polite"></div>
 
-  <script src="/config.js?v=20261114_plans7"></script>
-  <script type="module" src="/js/app.js?v=20261114_plans7"></script>
+  <script src="/config.js?v=20261115_theme_legal"></script>
+  <script type="module" src="/js/app.js?v=20261115_theme_legal"></script>
 </body>
 </html>
 

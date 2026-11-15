@@ -58,3 +58,37 @@
   /* Transitions */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+[data-theme="light"] {
+  /* Day Mode Surfaces */
+  --bg-obsidian: #f8fafc;
+  --bg-midnight: #f1f5f9;
+  --bg-deep-blue: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-panel-solid: #ffffff;
+  --bg-panel-hover: #f1f5f9;
+  --bg-code: #0f172a;
+
+  /* Day Mode Accents */
+  --yt-red: #cc0000;
+  --yt-red-hover: #aa0000;
+  --yt-red-soft: rgba(204, 0, 0, 0.08);
+  --neon-cyan: #0f172a;
+  --neon-blue: #1e293b;
+  --brand-blue: #0284c7;
+  --brand-indigo: #4338ca;
+  --brand-purple: #7e22ce;
+
+  /* Day Mode Text Hierarchy */
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+
+  /* Day Mode Borders & Shadows */
+  --border-subtle: #e2e8f0;
+  --border-bright: #cbd5e1;
+  --border-glass: rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-neon: 0 8px 24px rgba(15, 23, 42, 0.12);
+}

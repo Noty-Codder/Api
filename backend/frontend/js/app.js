@@ -14,11 +14,13 @@ import {
 } from "./api.js";
 import { openAuthModal } from "./components/modals.js";
 import { renderNavbar } from "./components/navbar.js";
+import { renderFooter } from "./components/footer.js";
 import { renderAdminDashboardPage, renderAdminLoginPage } from "./pages/admin.js";
 import { renderDashboardPage } from "./pages/dashboard.js";
 import { renderDocsPage } from "./pages/docs.js";
 import { renderLandingPage } from "./pages/landing.js";
 import { renderPlaygroundPage } from "./pages/playground.js";
+import { renderLegalPage } from "./pages/legal.js";
 
 const state = {
   user: null,
@@ -298,8 +300,17 @@ async function renderCurrentRoute() {
 
   state.route = route;
   renderNavbar(state, handlers);
+  renderFooter(state, handlers);
 
-  if (route === "docs") {
+  if (["terms", "privacy", "refund", "shipping", "contact"].includes(route)) {
+    renderLegalPage(route, state, handlers);
+  } else if (route === "pricing") {
+    state.route = "landing";
+    renderLandingPage(state, handlers);
+    setTimeout(() => {
+      document.querySelector(".plans-grid")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  } else if (route === "docs") {
     renderDocsPage(state, handlers);
   } else if (route === "dashboard") {
     if (params.get("tab")) state.dashboardTab = params.get("tab");

@@ -11,6 +11,8 @@ export function renderNavbar(state, handlers) {
   const user = state.user;
   const route = state.route;
   const brand = getBrand(state);
+  const currentTheme = document.documentElement.getAttribute("data-theme") || localStorage.getItem("theme") || "dark";
+  const isLight = currentTheme === "light";
 
   const navItems = [
     { id: "landing", label: "Media Hub", hash: "#/" },
@@ -85,12 +87,21 @@ export function renderNavbar(state, handlers) {
         </div>
 
         <div class="nav-actions">
+          <button class="theme-toggle-btn" id="btn-theme-toggle" title="Switch Theme (Day / Night)" aria-label="Toggle Theme">
+            ${isLight ? "☀️" : "🌙"}
+          </button>
           ${authActionsHtml}
           <button class="mobile-menu-btn" id="btn-mobile-menu" aria-label="Toggle Menu">☰</button>
         </div>
       </div>
 
       <div class="mobile-drawer" id="mobile-drawer">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 10px;border-bottom:1px solid var(--border-subtle);margin-bottom:8px;">
+          <span style="font-size:13px;color:var(--text-secondary);font-weight:600;">Theme Mode</span>
+          <button class="theme-toggle-btn" id="btn-mobile-theme-toggle" title="Toggle Day / Night Mode">
+            ${isLight ? "☀️ Day" : "🌙 Night"}
+          </button>
+        </div>
         <form class="yt-search-box" id="yt-mobile-search-form" style="margin-bottom:12px;">
           <input
             type="text"
@@ -101,7 +112,7 @@ export function renderNavbar(state, handlers) {
           <button type="submit" class="yt-search-btn">🔍</button>
         </form>
         ${linksHtml}
-        <button class="nav-link" data-nav="#support">Support</button>
+        <button class="nav-link" data-nav="#contact">Contact Support</button>
         ${
           user
             ? `
@@ -117,6 +128,18 @@ export function renderNavbar(state, handlers) {
       </div>
     </nav>
   `;
+
+  const toggleTheme = () => {
+    const current = document.documentElement.getAttribute("data-theme") || localStorage.getItem("theme") || "dark";
+    const next = current === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("theme", next);
+    } catch (_) {}
+    renderNavbar(state, handlers);
+  };
+  document.getElementById("btn-theme-toggle")?.addEventListener("click", toggleTheme);
+  document.getElementById("btn-mobile-theme-toggle")?.addEventListener("click", toggleTheme);
 
   root.querySelectorAll("[data-nav]").forEach((el) => {
     el.addEventListener("click", (e) => {
