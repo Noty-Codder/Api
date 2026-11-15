@@ -147,7 +147,7 @@ def register_user(
         full_name=full_name.strip(),
         company=company.strip(),
         role="user",
-        is_email_verified=False,
+        is_email_verified=True if not cfg.SMTP_HOST.strip() else False,
         is_active=True,
         is_suspended=False,
         auth_provider="email",

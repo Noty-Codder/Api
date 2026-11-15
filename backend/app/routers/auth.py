@@ -210,8 +210,9 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     cfg = get_settings()
     raw_token = request_password_reset(db, payload.email)
     resp = {"message": "If an account exists for that email, a password reset link has been sent."}
-    if raw_token and not cfg.is_production and not cfg.SMTP_HOST.strip():
+    if raw_token and not cfg.SMTP_HOST.strip():
         resp["dev_reset_hint"] = f"/#reset-password?token={raw_token}"
+        resp["message"] = "Email service is not configured. Click the link below to reset your password immediately."
     return resp
 
 
