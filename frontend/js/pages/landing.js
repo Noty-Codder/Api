@@ -77,7 +77,8 @@ export function renderLandingPage(state, handlers) {
   const brand = getBrand(state);
   const baseUrl = overview.api_base_url || `${getApiBase() || window.location.origin}/v1`;
   const faqs = overview.faqs || [];
-  const demoApiKey = "lily_test_CYVhA5u5DI3Ea5zDwm7dgZO--SFukFPEA4bHy1Yqu2U";
+  const demoApiKey = "betaapi_public_demo_guest_key_2026";
+  const activeKey = state.keys?.[0]?.key || state.activeKey || state.user?.api_key || demoApiKey;
 
   const chips = [
     { label: "All", query: "" },
@@ -535,8 +536,8 @@ curl -s "${esc(baseUrl)}/status" \\
       `;
     }
     if (grid) {
-      grid.innerHTML = FEATURED_HINDI_SONGS.map((song) => renderVideoCardHtml(song, baseUrl, demoApiKey)).join("");
-      attachCardActionListeners(grid, FEATURED_HINDI_SONGS, baseUrl, demoApiKey);
+      grid.innerHTML = FEATURED_HINDI_SONGS.map((song) => renderVideoCardHtml(song, baseUrl, activeKey)).join("");
+      attachCardActionListeners(grid, FEATURED_HINDI_SONGS, baseUrl, activeKey);
     }
   };
 
@@ -574,7 +575,7 @@ curl -s "${esc(baseUrl)}/status" \\
   // Initial card action listeners
   const gridEl = document.getElementById("yt-video-grid");
   if (gridEl) {
-    attachCardActionListeners(gridEl, FEATURED_HINDI_SONGS, baseUrl, demoApiKey);
+    attachCardActionListeners(gridEl, FEATURED_HINDI_SONGS, baseUrl, activeKey);
   }
 }
 
@@ -583,8 +584,9 @@ curl -s "${esc(baseUrl)}/status" \\
  */
 function renderVideoCardHtml(song, baseUrl, apiKey) {
   const safeId = esc(song.id);
-  const audioUrl = `${baseUrl}/media/audio?id=${safeId}&format=mp3&bitrate=320`;
-  const videoUrl = `${baseUrl}/media/video?id=${safeId}&quality=1080p`;
+  const keyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : "";
+  const audioUrl = `${baseUrl}/media/audio?id=${safeId}&format=mp3&bitrate=320${keyParam}`;
+  const videoUrl = `${baseUrl}/media/video?id=${safeId}&quality=1080p${keyParam}`;
 
   return `
     <div class="yt-video-card" data-video-id="${safeId}">
@@ -678,11 +680,12 @@ function openDownloadPreviewModal(videoId, title, initialMode, baseUrl, apiKey) 
   const container = document.getElementById("yt-download-modal-container");
   if (!container) return;
 
-  const audio320 = `${baseUrl}/media/audio?id=${videoId}&format=mp3&bitrate=320`;
-  const audio192 = `${baseUrl}/media/audio?id=${videoId}&format=mp3&bitrate=192`;
-  const audioM4a = `${baseUrl}/media/audio?id=${videoId}&format=m4a`;
-  const video1080 = `${baseUrl}/media/video?id=${videoId}&quality=1080p`;
-  const video720 = `${baseUrl}/media/video?id=${videoId}&quality=720p`;
+  const keyParam = apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : "";
+  const audio320 = `${baseUrl}/media/audio?id=${videoId}&format=mp3&bitrate=320${keyParam}`;
+  const audio192 = `${baseUrl}/media/audio?id=${videoId}&format=mp3&bitrate=192${keyParam}`;
+  const audioM4a = `${baseUrl}/media/audio?id=${videoId}&format=m4a${keyParam}`;
+  const video1080 = `${baseUrl}/media/video?id=${videoId}&quality=1080p${keyParam}`;
+  const video720 = `${baseUrl}/media/video?id=${videoId}&quality=720p${keyParam}`;
 
   container.innerHTML = `
     <div class="modal-backdrop" id="yt-modal-backdrop">
@@ -718,15 +721,15 @@ function openDownloadPreviewModal(videoId, title, initialMode, baseUrl, apiKey) 
                 🎵 High-Bitrate Audio Downloads (MP3 / M4A)
               </span>
               <div style="display:flex;flex-direction:column;gap:8px;">
-                <a href="${esc(audio320)}" target="_blank" class="btn btn-primary btn-sm" style="justify-content:space-between;text-decoration:none;">
+                <a href="${esc(audio320)}" target="_blank" download class="btn btn-primary btn-sm" style="justify-content:space-between;text-decoration:none;">
                   <span>⬇ Download MP3 (320kbps Studio)</span>
                   <span style="font-size:11px;opacity:0.8;">Best Audio</span>
                 </a>
-                <a href="${esc(audio192)}" target="_blank" class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
+                <a href="${esc(audio192)}" target="_blank" download class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
                   <span>⬇ Download MP3 (192kbps Standard)</span>
                   <span style="font-size:11px;opacity:0.8;">Fast Download</span>
                 </a>
-                <a href="${esc(audioM4a)}" target="_blank" class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
+                <a href="${esc(audioM4a)}" target="_blank" download class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
                   <span>⬇ Download M4A (AAC Audio)</span>
                   <span style="font-size:11px;opacity:0.8;">Apple & Mobile</span>
                 </a>
@@ -738,11 +741,11 @@ function openDownloadPreviewModal(videoId, title, initialMode, baseUrl, apiKey) 
                 🎬 Video Downloads (MP4 Stream)
               </span>
               <div style="display:flex;flex-direction:column;gap:8px;">
-                <a href="${esc(video1080)}" target="_blank" class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
+                <a href="${esc(video1080)}" target="_blank" download class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
                   <span>⬇ Download Video (1080p Full HD)</span>
                   <span style="font-size:11px;opacity:0.8;">MP4 Video</span>
                 </a>
-                <a href="${esc(video720)}" target="_blank" class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
+                <a href="${esc(video720)}" target="_blank" download class="btn btn-secondary btn-sm" style="justify-content:space-between;text-decoration:none;">
                   <span>⬇ Download Video (720p HD)</span>
                   <span style="font-size:11px;opacity:0.8;">MP4 Video</span>
                 </a>
@@ -757,6 +760,10 @@ function openDownloadPreviewModal(videoId, title, initialMode, baseUrl, apiKey) 
             <button class="btn btn-ghost btn-sm" id="btn-copy-modal-curl" style="padding:2px 8px;font-size:11px;">Copy cURL</button>
           </div>
           <pre style="margin:0;font-size:12px;color:#3ea6ff;overflow-x:auto;padding:4px 0;">curl -L "${esc(audio320)}" -H "X-API-Key: ${esc(apiKey)}" -o "${esc(videoId)}.mp3"</pre>
+        </div>
+      </div>
+    </div>
+  `;
         </div>
       </div>
     </div>

@@ -478,6 +478,70 @@ async def _fetch_youtube_oembed(target_url: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _clean_song_title_for_search(title: str) -> str:
+    """Clean video tags like (Official Video), 4K, brackets, etc. for cleaner music searches."""
+    t = re.sub(
+        r"(?i)\(?(?:official\s*(?:video|audio|music\s*video|lyric\s*video|hd|4k|remastered|full\s*song|video\s*song))\)?",
+        "",
+        title,
+    )
+    t = re.sub(r"\[[^\]]*\]", "", t)
+    t = re.sub(r"\{[^\}]*\}", "", t)
+    parts = re.split(r"\s*[|•]\s*", t)
+    cleaned = parts[0].strip() or title.strip()
+    return re.sub(r"\s{2,}", " ", cleaned)
+
+
+async def _download_audio_fallback_to_dir(
+    query_or_title: str,
+    runtime_cfg: MediaRuntimeConfig,
+    *,
+    fmt: str,
+    bitrate: str,
+    out_dir: str,
+) -> Tuple[Path, str]:
+    """Fallback audio downloader using audio/music providers when YouTube stream extraction is bot-blocked."""
+    yt_dlp = _import_yt_dlp()
+    ffmpeg_bin = _require_ffmpeg()
+    clean_q = _clean_song_title_for_search(query_or_title)
+    target = f"scsearch1:{clean_q}"
+
+    def _run() -> Tuple[str, str]:
+        opts: Dict[str, Any] = {
+            "quiet": True,
+            "no_warnings": True,
+            "ignoreconfig": True,
+            "socket_timeout": 30,
+            "retries": 2,
+            "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
+            "ffmpeg_location": ffmpeg_bin,
+            "restrictfilenames": True,
+            "format": "bestaudio/best",
+        }
+        if fmt in ("mp3", "m4a", "opus", "wav", "flac"):
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": fmt,
+                    "preferredquality": bitrate,
+                },
+                {"key": "FFmpegMetadata"},
+            ]
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(target, download=True)
+            entries = info.get("entries") or [info]
+            first = entries[0] if entries else info
+            track_title = first.get("title") or query_or_title
+            files = [str(p) for p in Path(out_dir).iterdir() if p.is_file() and not p.name.endswith(".part")]
+            if not files:
+                raise FileNotFoundError("Audio fallback produced no output file.")
+            best_file = max(files, key=lambda p: os.path.getsize(p))
+            return best_file, track_title
+
+    out_file, resolved_title = await asyncio.to_thread(_run)
+    return Path(out_file), resolved_title
+
+
 def _base_ydl_opts(cookies_file: Optional[str], runtime_cfg: MediaRuntimeConfig, *, flat: bool = False) -> Dict[str, Any]:
     opts: Dict[str, Any] = {
         "quiet": True,
@@ -989,19 +1053,73 @@ async def get_media_info(
         raise MediaServiceError(503, "MEDIA_API_DISABLED", "Built-in Media API is currently disabled by the administrator.")
 
     target_url = await _resolve_target_url(params, rt)
-    info = await _extract_info_async(target_url, rt, flat=False)
-    if info.get("_type") == "playlist":
-        entries = [e for e in (info.get("entries") or []) if isinstance(e, dict)]
-        if not entries:
-            raise MediaServiceError(404, "MEDIA_UNAVAILABLE", "No playable item found for target.")
-        info = entries[0]
-
-    return _normalize_media_details(
-        info,
-        api_key_id=api_key_id,
-        public_base_url=public_base_url,
-        settings=cfg,
-    )
+    try:
+        info = await _extract_info_async(target_url, rt, flat=False)
+        if info.get("_type") == "playlist":
+            entries = [e for e in (info.get("entries") or []) if isinstance(e, dict)]
+            if not entries:
+                raise MediaServiceError(404, "MEDIA_UNAVAILABLE", "No playable item found for target.")
+            info = entries[0]
+        return _normalize_media_details(
+            info,
+            api_key_id=api_key_id,
+            public_base_url=public_base_url,
+            settings=cfg,
+        )
+    except MediaServiceError as me:
+        if me.error_code in ("YOUTUBE_BOT_VERIFICATION_REQUIRED", "MEDIA_EXTRACTION_FAILED"):
+            oembed = await _fetch_youtube_oembed(target_url)
+            if not oembed:
+                raise me
+            yt_id = _extract_yt_id(target_url) or "media"
+            title = oembed.get("title") or "YouTube Song"
+            author = oembed.get("author_name") or "YouTube Channel"
+            thumb = oembed.get("thumbnail_url")
+            return {
+                "source": {
+                    "extractor": "youtube-oembed",
+                    "id": yt_id,
+                    "url": target_url,
+                    "domain": "youtube.com",
+                    "live_status": None,
+                    "availability": "public",
+                    "is_live": False,
+                    "was_live": False,
+                    "age_limit": 0,
+                },
+                "metadata": {
+                    "title": title,
+                    "fulltitle": title,
+                    "description": f"Audio & video metadata extracted for {title}",
+                    "language": "hi",
+                    "duration_seconds": None,
+                    "duration_string": "Audio Track",
+                },
+                "channel": {
+                    "id": "",
+                    "name": author,
+                    "url": oembed.get("author_url") or "",
+                    "uploader": author,
+                },
+                "thumbnails": {
+                    "best": thumb,
+                    "all": [{"url": thumb}] if thumb else [],
+                },
+                "downloads": _build_download_links(
+                    public_base_url=public_base_url,
+                    api_key_id=api_key_id,
+                    canonical_target=target_url,
+                    yt_id=yt_id,
+                    settings=cfg,
+                ),
+                "direct_cdn": {
+                    "audio_url": None,
+                    "video_url": None,
+                    "ip_bound": False,
+                    "note": "Use gateway downloads.* URLs for automatic high-quality streaming.",
+                },
+            }
+        raise
 
 
 def _pick_direct_stream(
@@ -1373,6 +1491,19 @@ async def _download_with_ytdlp_to_dir(
     except MediaServiceError:
         raise
     except Exception as exc:
+        if media_type == "audio":
+            try:
+                song_search = (extracted_info.get("title") if extracted_info else None) or target_url
+                fb_path, _ = await _download_audio_fallback_to_dir(
+                    song_search,
+                    runtime_cfg,
+                    fmt=fmt,
+                    bitrate=bitrate,
+                    out_dir=out_dir,
+                )
+                return fb_path
+            except Exception:
+                pass
         await _raise_classified_extractor_error(exc, target_url)
         raise
 
@@ -1441,12 +1572,33 @@ async def prepare_media_download(
         bitrate = "192"
 
     target_url = await _resolve_target_url(params, rt)
-    info = await _extract_info_async(target_url, rt, flat=False)
-    if info.get("_type") == "playlist":
-        entries = [e for e in (info.get("entries") or []) if isinstance(e, dict)]
-        if not entries:
-            raise MediaServiceError(404, "MEDIA_UNAVAILABLE", "No playable item found for target.")
-        info = entries[0]
+    info = None
+    audio_fallback_active = False
+
+    try:
+        info = await _extract_info_async(target_url, rt, flat=False)
+        if info.get("_type") == "playlist":
+            entries = [e for e in (info.get("entries") or []) if isinstance(e, dict)]
+            if not entries:
+                raise MediaServiceError(404, "MEDIA_UNAVAILABLE", "No playable item found for target.")
+            info = entries[0]
+    except MediaServiceError as me:
+        if media_type == "audio" and me.error_code in ("YOUTUBE_BOT_VERIFICATION_REQUIRED", "MEDIA_EXTRACTION_FAILED"):
+            oembed = await _fetch_youtube_oembed(target_url)
+            search_title = (oembed.get("title") if oembed else None) or params.get("q") or params.get("title") or params.get("song") or ""
+            if not search_title:
+                raise me
+            audio_fallback_active = True
+            info = {
+                "id": _extract_yt_id(target_url) or "audio",
+                "title": (oembed.get("title") if oembed else None) or search_title,
+                "channel": (oembed.get("author_name") if oembed else None) or "Music",
+                "thumbnail": oembed.get("thumbnail_url") if oembed else None,
+                "formats": [],
+                "webpage_url": target_url,
+            }
+        else:
+            raise
 
     if info.get("is_live"):
         raise MediaServiceError(422, "LIVE_STREAM_UNSUPPORTED", "Downloading active live streams is not supported.")
@@ -1532,6 +1684,32 @@ async def prepare_media_download(
             disposition="inline" if mode == "inline" else "attachment",
             range_header=range_header,
         )
+
+    if audio_fallback_active:
+        tmp_dir = tempfile.mkdtemp(prefix="beta_dl_fb_")
+        try:
+            out_path, _ = await _download_audio_fallback_to_dir(
+                title,
+                rt,
+                fmt=fmt,
+                bitrate=bitrate,
+                out_dir=tmp_dir,
+            )
+            final_ext = out_path.suffix.lstrip(".").lower() or resolved_ext
+            final_mime = AUDIO_EXT_MIME.get(final_ext, mime_type)
+            return PreparedMediaStream(
+                mode="stream",
+                status_code=200,
+                local_dir=tmp_dir,
+                local_file=str(out_path),
+                filename=title,
+                mime_type=final_mime,
+                content_length=out_path.stat().st_size,
+                disposition="inline" if mode == "inline" else "attachment",
+            )
+        except Exception as exc:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise MediaServiceError(502, "MEDIA_AUDIO_FALLBACK_FAILED", f"Audio track extraction failed: {str(exc)[:200]}")
 
     # FFmpeg transcoding / muxing path into an isolated temporary directory
     tmp_dir = tempfile.mkdtemp(prefix="beta_dl_")

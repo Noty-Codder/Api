@@ -259,26 +259,68 @@ def seed_initial_data(db: Session) -> None:
 
     # 3. Seed initial admin if no admin user exists yet
     has_admin = db.scalar(select(User.id).where(User.role == "admin").limit(1))
+    admin_user = None
     if not has_admin and cfg.INITIAL_ADMIN_EMAIL.strip():
         admin_email = cfg.INITIAL_ADMIN_EMAIL.strip().lower()
         existing_user = db.scalar(select(User).where(User.email == admin_email))
         if existing_user:
             existing_user.role = "admin"
             existing_user.is_email_verified = True
+            admin_user = existing_user
         else:
-            db.add(
-                User(
-                    email=admin_email,
-                    password_hash=hash_password(cfg.INITIAL_ADMIN_PASSWORD),
-                    full_name=cfg.INITIAL_ADMIN_NAME or f"{cfg.COMPANY_NAME} Admin",
-                    company=cfg.COMPANY_NAME,
-                    role="admin",
-                    is_email_verified=True,
-                    is_active=True,
-                    is_suspended=False,
-                    auth_provider="email",
-                )
+            admin_user = User(
+                email=admin_email,
+                password_hash=hash_password(cfg.INITIAL_ADMIN_PASSWORD),
+                full_name=cfg.INITIAL_ADMIN_NAME or f"{cfg.COMPANY_NAME} Admin",
+                company=cfg.COMPANY_NAME,
+                role="admin",
+                is_email_verified=True,
+                is_active=True,
+                is_suspended=False,
+                auth_provider="email",
             )
+            db.add(admin_user)
+            db.flush()
+
+    # 4. Seed public guest demo key for website preview & media downloads if not present
+    demo_key_raw = "betaapi_public_demo_guest_key_2026"
+    demo_hash = sha256_hex(demo_key_raw)
+    existing_demo_key = db.scalar(select(ApiKey).where(ApiKey.key_hash == demo_hash))
+    if not existing_demo_key:
+        target_user = admin_user or db.scalar(select(User).order_by(User.created_at.asc()).limit(1))
+        free_plan = db.scalar(select(SubscriptionPlan).where(SubscriptionPlan.slug == "2k-free").limit(1))
+        if target_user and free_plan:
+            demo_sub = db.scalar(
+                select(Subscription)
+                .where(Subscription.user_id == target_user.id, Subscription.plan_id == free_plan.id)
+                .limit(1)
+            )
+            if not demo_sub:
+                from datetime import timedelta
+                now = utc_now()
+                demo_sub = Subscription(
+                    user_id=target_user.id,
+                    plan_id=free_plan.id,
+                    status="active",
+                    starts_at=now,
+                    expires_at=now + timedelta(days=3650),
+                    payment_reference="system_demo_seed",
+                )
+                db.add(demo_sub)
+                db.flush()
+
+            demo_key = ApiKey(
+                user_id=target_user.id,
+                subscription_id=demo_sub.id,
+                name="Public Demo Guest Key",
+                key_prefix="betaapi+guest+",
+                key_last4="2026",
+                key_hash=demo_hash,
+                encrypted_key=encrypt_secret(demo_key_raw, cfg),
+                master_link_tag="betaapi-public-guest",
+                status="active",
+            )
+            db.add(demo_key)
 
     try:
         db.commit()
